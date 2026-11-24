@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FlowLab</title>
+  <style>
+    :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #0f1419; color: #e7ecf1; }
+    main { max-width: 880px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; }
+    p.sub { margin: 0 0 20px; color: #9aa7b4; }
+    form, .card, .log { background: #1a222c; border: 1px solid #2a3644; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    label { display: block; font-size: 0.85rem; margin-bottom: 8px; color: #c5d0da; }
+    input { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border-radius: 8px; border: 1px solid #344252; background: #0f1419; color: inherit; }
+    button { margin-top: 8px; margin-right: 8px; padding: 8px 12px; border: 0; border-radius: 8px; background: #3d8bfd; color: white; cursor: pointer; }
+    button.ghost { background: #2a3644; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .stat { background: #121920; border-radius: 10px; padding: 12px; }
+    .stat b { display: block; font-size: 1.3rem; margin-top: 4px; }
+    .stat span { color: #9aa7b4; font-size: 0.8rem; }
+    .log { height: 280px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+    .row { display: flex; gap: 8px; align-items: end; }
+    .row label { flex: 1; }
+    .hidden { display: none; }
+    .ok { color: #7ddea2; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>FlowLab</h1>
+    <p class="sub">Auth, dashboard, and a live stream for Android Flow practice.</p>
+
+    <form id="login">
+      <div class="row">
+        <label>Email<input id="email" value="demo@flow.app" autocomplete="username" /></label>
+        <label>Password<input id="password" type="password" value="demo1234" autocomplete="current-password" /></label>
+      </div>
+      <button type="submit">Log in</button>
+      <span id="login-error"></span>
+    </form>
+
+    <section id="app" class="hidden">
+      <div class="card">
+        <div class="grid" id="stats"></div>
+        <button id="refresh" class="ghost" type="button">Refresh dashboard</button>
+        <button id="simulate" type="button">Push sample reading</button>
+        <button id="logout" class="ghost" type="button">Log out</button>
+      </div>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+  <script>
+    const loginForm = document.getElementById("login");
+    const app = document.getElementById("app");
+    const logEl = document.getElementById("log");
+    let source = null;
+
+    function token() { return localStorage.getItem("token"); }
+
+    function line(text) {
+      logEl.textContent = text + "\n" + logEl.textContent;
+    }
+
+    async function api(path, options = {}) {
+      const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+      if (token()) headers.Authorization = "Bearer " + token();
+      const res = await fetch(path, Object.assign({}, options, { headers }));
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || res.statusText);
+      }
+      return res.json();
+    }
+
+    async function loadDashboard() {
+      const data = await api("/api/dashboard");
+      const s = data.summary;
+      document.getElementById("stats").innerHTML = [
+        ["Devices", s.device_count],
+        ["Online", s.online_devices],
+        ["Readings", s.reading_count],
+        ["Temp", s.latest_temperature ?? "—"],
+        ["Humidity", s.latest_humidity ?? "—"],
+      ].map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join("");
+    }
+
+    function openStream() {
+      if (source) source.close();
+      source = new EventSource("/api/stream/events?token=" + encodeURIComponent(token()));
+      source.onmessage = (ev) => {
+        line(ev.data);
+        const event = JSON.parse(ev.data);
+        if (event.type === "telemetry") loadDashboard().catch(() => {});
+      };
+      source.onerror = () => line("stream interrupted, browser will retry");
+    }
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const data = await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value,
+          }),
+        });
+        localStorage.setItem("token", data.token);
+        loginForm.classList.add("hidden");
+        app.classList.remove("hidden");
+        document.getElementById("login-error").textContent = "";
+        await loadDashboard();
+        openStream();
+      } catch (err) {
+        document.getElementById("login-error").textContent = err.message;
+      }
+    });
+
+    document.getElementById("refresh").onclick = () => loadDashboard().catch((e) => line(e.message));
+    document.getElementById("simulate").onclick = async () => {
+      await api("/api/stream/simulate", { method: "POST" });
+    };
+    document.getElementById("logout").onclick = () => {
+      if (source) source.close();
+      localStorage.removeItem("token");
+      location.reload();
+    };
+
+    if (token()) {
+      loginForm.classList.add("hidden");
+      app.classList.remove("hidden");
+      loadDashboard().then(openStream).catch(() => {
+        localStorage.removeItem("token");
+        location.reload();
+      });
+    }
+  </script>
+</body>
+</html>
