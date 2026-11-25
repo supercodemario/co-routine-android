@@ -64,7 +64,8 @@ class LoginViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            message = "Welcome ${result.data.user.name}"
+                            message = "Welcome ${result.data.user.name}",
+                            isLoginSuccess = true
                         )
                     }
                 }
@@ -73,7 +74,8 @@ class LoginViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            message = result.message
+                            message = result.message,
+                            isLoginSuccess = false
                         )
                     }
                 }

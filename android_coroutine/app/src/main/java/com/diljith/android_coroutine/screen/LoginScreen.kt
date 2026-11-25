@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,16 +28,25 @@ import androidx.compose.ui.unit.dp
 
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.diljith.android_coroutine.component.AppButton
 import com.diljith.android_coroutine.component.AppTextField
 
 @Composable
 fun LoginScreen(
-    padding: PaddingValues,
-    modifier: Modifier,
+    padding: PaddingValues = PaddingValues(0.dp),
+    modifier: Modifier = Modifier,
+    onLoginSuccess: () -> Unit,
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.isLoginSuccess) {
+        if (state.isLoginSuccess) {
+            onLoginSuccess()
+        }
+    }
+
     LoginContent(
         padding = padding,
         modifier = modifier,
@@ -56,6 +66,8 @@ private fun LoginContent(
     onPasswordChange: (String) -> Unit,
     onLogin: () -> Unit
 ) {
+
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -112,7 +124,6 @@ private fun LoginContent(
 @Preview(showBackground = true)
 @Composable
 private fun LoginScreenPrev() {
-    // Fixed the ClassCastException by using PaddingValues instead of trying to cast Modifier.padding to PaddingValues.
     LoginContent(
         modifier = Modifier,
         padding = PaddingValues(0.dp),

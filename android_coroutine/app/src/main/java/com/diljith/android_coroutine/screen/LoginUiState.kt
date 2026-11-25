@@ -6,5 +6,6 @@ data class LoginUiState(
     val userNameError: String? = null,
     val passwordError: String? = null,
     val isLoading: Boolean = false,
-    val message: String? = null
+    val message: String? = null,
+    val isLoginSuccess: Boolean=false
 )
